@@ -1,2 +1,3 @@
 (test
- (name approx))
+ (name approx)
+ (libraries approx ounit2))

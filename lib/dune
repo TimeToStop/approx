@@ -1,2 +1,3 @@
 (library
- (name approx))
+ (name approx)
+ (public_name approx))
