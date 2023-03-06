@@ -1,4 +1,4 @@
 (executable
  (public_name approx)
  (name main)
- (libraries approx))
+ (libraries approx lwt lwt.unix))

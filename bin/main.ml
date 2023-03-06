@@ -26,10 +26,16 @@ let rec approximationImpl n k ids points =
   match added with
   | arr when List.length arr = k ->
       let funcsArr =
-        Array.map (fun id -> Approx.getFunc added id) (Array.of_list ids)
+        Array.map
+          (fun id -> Lwt.return (Approx.getFunc added id))
+          (Array.of_list ids)
+        |> Array.to_list
+        |> Lwt_list.map_p (fun p ->
+               Lwt.bind p (fun result -> Lwt.return result) )
+        |> Lwt_main.run
       in
       let pointGen = Approx.genPoint n added in
-      Approx.printData funcsArr pointGen n ;
+      Approx.printData (Array.of_list funcsArr) pointGen n ;
       approximationImpl n k ids added
   | _ -> approximationImpl n k ids added
 
