@@ -25,9 +25,10 @@ jobs:
       run: | 
         opam install dune
         opam install -t . --deps-only
+        opam install logs
+        opam install lwt
         opam install ounit2.2.2.6
         opam install ocamlformat
-        opam install qcheck
     - name: Lint
       run: opam exec -- dune fmt
     - name: Build
