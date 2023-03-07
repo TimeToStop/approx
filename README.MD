@@ -1,147 +1,131 @@
-## Лабораторная №2
+# Функциональное программирование
+## Лабораторная работа 3
 
 <b>Выполнил:</b> Ратушняк Евгений Алексеевич \
-<b>Группа:</b> P34112 \
+<b>Группа:</b> p34102 \
 <b>Преподаватель:</b> Пенской Александр Владимирович
 
-### Двоичное дерево на OCaml
+### Реализация
+Функция читает из стандартного потока пока не будет пустая строка. 
+В результате получаем список пар (x,y) 
+```ocaml
+let rec read k pList =
+  let input = read_line () in
+  if input <> "" then
+    let data =
+      String.split_on_char ';' input |> List.filter (fun x -> x <> "")
+    in
+    if List.length data >= 2 then
+      let x = float_of_string (List.nth data 0) in
+      let y = float_of_string (List.nth data 1) in
+      match pList with
+      | [] -> [(x, y)]
+      | _ -> (x, y) :: truncate (k - 1) pList
+    else read k pList
+  else pList
+
+```
+Полученный список точек обрабатывается, параллельно вычисляются функции, Печатается результат.\ 
+Ожидается ввод новой пары чисел и алгоритм повторяется.
+
+`linear` - аппроксимация линейной функцией 
+`logarithm` - аппроксимация логарифмической функцией
+`segment` - аппроксимация отрезками
 
 ```ocaml
-type 'a tree = Leaf | Node of 'a * 'a tree * 'a tree
+let linear points =
+  let sx = List.fold_left (fun state (x, _) -> state +. x) 0. points in
+  let sxx =
+    List.fold_left (fun state (x, _) -> state +. (x *. x)) 0. points
+  in
+  let sy = List.fold_left (fun state (_, y) -> state +. y) 0. points in
+  let sxy =
+    List.fold_left (fun state (x, y) -> state +. (x *. y)) 0. points
+  in
+  let n = List.length points in
+  let a =
+    ((sxy *. float_of_int n) -. (sx *. sy))
+    /. ((sxx *. float_of_int n) -. (sx *. sx))
+  in
+  let b =
+    ((sxx *. sy) -. (sx *. sxy)) /. ((sxx *. float_of_int n) -. (sx *. sx))
+  in
+  let f x = (a *. x) +. b in
+  f
 
-let empty = Leaf
+let segment points =
+  let rec findBottomBorder i v =
+    if i < List.length points then
+      let x, _ = List.nth points i in
+      if x < v then i else findBottomBorder (i + 1) v
+    else -1
+  in
+  let rec findTopBorder i v =
+    if i >= 0 then
+      let x, _ = List.nth points i in
+      if x >= v then i else findTopBorder (i - 1) v
+    else -1
+  in
+  let f x =
+    let top = findTopBorder (List.length points - 1) x in
+    let bottom = findBottomBorder 0 x in
+    if top = -1 then
+      let _, yi = List.nth points 0 in
+      yi
+    else if bottom = -1 then
+      let _, yi = List.nth points (List.length points - 1) in
+      yi
+    else
+      let xi, yi = List.nth points top in
+      let xiPrev, yiPrev = List.nth points bottom in
+      let a = (yi -. yiPrev) /. (xi -. xiPrev) in
+      let b = yi -. (a *. xi) in
+      (a *. x) +. b
+  in
+  f
 
-let rec size = function Leaf -> 0 | Node (_, l, r) -> 1 + size l + size r
 
-let rec insert value = function
-  | Leaf -> Node (value, Leaf, Leaf)
-  | Node (curr, l, r) when value < curr -> Node (curr, insert value l, r)
-  | Node (curr, l, r) when value > curr -> Node (curr, l, insert value r)
-  | Node (curr, l, r) -> Node (curr, l, r)
-
-let rec contains value = function
-  | Leaf -> false
-  | Node (curr, l, _) when value < curr -> contains value l
-  | Node (curr, _, r) when value > curr -> contains value r
-  | Node (_, _, _) -> true
-
-let rec min = function
-  | Leaf -> failwith "Called on empty tree"
-  | Node (curr, Leaf, _) -> curr
-  | Node (_, l, _) -> min l
-
-let rec mergeAfterTopErase l r =
-  match (l, r) with
-  | Leaf, Leaf -> Leaf
-  | l, Leaf -> l
-  | Leaf, r -> r
-  | l, r ->
-      let minValue = min r in
-      Node (minValue, l, erase minValue r)
-
-and erase value = function
-  | Leaf -> Leaf
-  | Node (curr, l, _) when value < curr -> erase value l
-  | Node (curr, _, r) when value > curr -> erase value r
-  | Node (_, l, r) -> mergeAfterTopErase l r
-
-let rec filter f = function
-  | Leaf -> Leaf
-  | Node (curr, l, r) when f curr -> Node (curr, filter f l, filter f r)
-  | Node (_, l, r) -> mergeAfterTopErase (filter f l) (filter f r)
-
-let rec foldr f acc = function
-  | Leaf -> acc
-  | Node (curr, l, r) ->
-      let newAcc = foldr f (f acc curr) r in
-      foldl f newAcc l
-
-and foldl f acc = function
-  | Leaf -> acc
-  | Node (curr, l, r) ->
-      let newAcc = foldl f (f acc curr) l in
-      foldr f newAcc r
-
-let map f tree = foldl (fun tree x -> insert (f x) tree) Leaf tree
-
-let fromList list = List.fold_left (fun tree x -> insert x tree) Leaf list
-
-let merge t1 t2 = foldl (fun tree x -> insert x tree) t1 t2
-
-let rec isSame t1 t2 =
-  match (t1, t2) with
-  | Leaf, Leaf -> true
-  | Leaf, _ -> false
-  | _, Leaf -> false
-  | Node (curr1, l1, r1), Node (curr2, l2, r2) ->
-      curr1 == curr2 && isSame l1 l2 && isSame r1 r2
-
-let isEqualsAsSet t1 t2 =
-  size t1 == size t2
-  && foldl (fun result x -> result && contains x t2) true t1
-
+let logarifm points =
+  let sx = List.fold_left (fun state (x, _) -> state +. log x) 0. points in
+  let sxx =
+    List.fold_left (fun state (x, _) -> state +. (log x *. log x)) 0. points
+  in
+  let sy = List.fold_left (fun state (_, y) -> state +. y) 0. points in
+  let sxy =
+    List.fold_left (fun state (x, y) -> state +. (log x *. y)) 0. points
+  in
+  let n = List.length points in
+  let delta = (sxx *. float_of_int n) -. (sx *. sx) in
+  let delta1 = (sxy *. float_of_int n) -. (sx *. sy) in
+  let delta2 = (sxx *. sy) -. (sx *. sxy) in
+  let a = delta1 /. delta in
+  let b = delta2 /. delta in
+  let f x = (a *. log x) +. b in
+  f
 
 ```
 
-### Тесты
-Property Based тесты при помощи QCheck
-Unit тесты при помощи OUnit2
-
-```ocaml
-
-(* association of merge *)
-let association =
-  QCheck.Test.make ~count:1000 ~name:"association of merge "
-    QCheck.(triple (list small_nat) (list small_nat) (list small_nat))
-    (fun (a_list, b_list, c_list) ->
-      let a = Bitree.fromList a_list in
-      let b = Bitree.fromList b_list in
-      let c = Bitree.fromList c_list in
-      Bitree.isEqualsAsSet
-        (Bitree.merge (Bitree.merge a b) c)
-        (Bitree.merge a (Bitree.merge b c)) )
-
-(* insert element retains binary tree*)
-let insertToBitree =
-  QCheck.Test.make ~count:1000 ~name:"insert bitree "
-    QCheck.(pair small_nat (list small_nat))
-    (fun (to_insert, v_list) ->
-      let tree = Bitree.fromList v_list in
-      let tree_insert = Bitree.insert to_insert tree in
-      isBitreeValid tree && isBitreeValid tree_insert )
-
-(* erase element retains binary tree*)
-let eraseToBitree =
-  QCheck.Test.make ~count:1000 ~name:"erase bitree "
-    QCheck.(list small_nat)
-    (fun v_list ->
-      let tree = Bitree.fromList v_list in
-      let tree_erase =
-        match tree with
-        | Leaf -> Leaf
-        | Node (curr, _, _) -> Bitree.erase curr tree
-      in
-      isBitreeValid tree && isBitreeValid tree_erase )
-
-(* merge with empty retains tree unchanged *)
-let mergeEmpty =
-  QCheck.Test.make ~count:1000 ~name:"merge empty"
-    QCheck.(list small_nat)
-    (fun x_list ->
-      let tree = Bitree.fromList x_list in
-      let left = Bitree.merge tree Bitree.empty in
-      let right = Bitree.merge Bitree.empty tree in
-      Bitree.isSame tree left && Bitree.isSame tree right )
+Функция `printData` выводит на экран результат аппроксимации.
 
 ```
-........
-Ran: 8 tests in: 0.00 seconds.
-OK
-random seed: 48538408
-....
-Ran: 4 tests in: 0.39 seconds.
-OK
+$ cat test.csv | dune exec approx 5 5 1 2 3
+x: 4.00000, y: 4.00000 | x: 4.00000, y: 4.03836 | x: 4.00000, y: 4.00000 |
+x: 4.20000, y: 4.20000 | x: 4.20000, y: 4.15651 | x: 4.20000, y: 4.20000 |
+x: 4.40000, y: 4.40000 | x: 4.40000, y: 4.26916 | x: 4.40000, y: 4.40000 |
+x: 4.60000, y: 4.60000 | x: 4.60000, y: 4.37680 | x: 4.60000, y: 4.60000 |
+x: 4.80000, y: 4.80000 | x: 4.80000, y: 4.47987 | x: 4.80000, y: 4.80000 |
+x: 5.00000, y: 5.00000 | x: 5.00000, y: 5.23451 | x: 5.00000, y: 5.00000 |
+x: 5.40000, y: 5.40000 | x: 5.40000, y: 5.53751 | x: 5.40000, y: 5.40000 |
+x: 5.80000, y: 5.80000 | x: 5.80000, y: 5.81886 | x: 5.80000, y: 5.80000 |
+x: 6.20000, y: 6.20000 | x: 6.20000, y: 6.08143 | x: 6.20000, y: 6.20000 |
+x: 6.60000, y: 6.60000 | x: 6.60000, y: 6.32758 | x: 6.60000, y: 6.60000 |
+x: 7.00000, y: 7.00000 | x: 7.00000, y: 7.40947 | x: 7.00000, y: 7.00000 |
+x: 7.60000, y: 7.60000 | x: 7.60000, y: 7.88671 | x: 7.60000, y: 7.60000 |
+x: 8.20000, y: 8.20000 | x: 8.20000, y: 8.32767 | x: 8.20000, y: 8.20000 |
+x: 8.80000, y: 8.80000 | x: 8.80000, y: 8.73747 | x: 8.80000, y: 8.80000 |
+x: 9.40000, y: 9.40000 | x: 9.40000, y: 9.12024 | x: 9.40000, y: 9.40000 |
 
+```
 
-### Выводы
-Property Based Testing - позволяет автоматически генерировать большое количество тестовых случаев на основе свойств или требований. Были протестированны такие свойства моноида как: ассоциативность, наличие нейтрального элемента, свойства вставки и удаления, которые сохраняют упорядоченность элементов в дереве. В ходе лабораторной работы я научилися использовать Property Based Testing и узнал о существовании monoid
+### Выводы 
+Я вспомнил методы аппроксимации и узнал о работе с потоками на Ocaml при помощи Lwt. Не очень удобно, если программа написана не полностью на данной библиотеке, а лишь небольшая ее часть.
